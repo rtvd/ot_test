@@ -10,14 +10,65 @@
 
 static const char *const WINDOW_TITLE = "Object Tracking Test";
 
+cv::Ptr<cv::Tracker> make_tracker_mil() {
+    return cv::TrackerMIL::create();
+}
+
+cv::Ptr<cv::Tracker> make_tracker_boosting() {
+    return cv::TrackerBoosting::create();
+}
+
+cv::Ptr<cv::Tracker> make_tracker_median_flow() {
+    return cv::TrackerMedianFlow::create();
+}
+
+cv::Ptr<cv::Tracker> make_tracker_tld() {
+    return cv::TrackerTLD::create();
+}
+
+cv::Ptr<cv::Tracker> make_tracker_kcf() {
+    return cv::TrackerKCF::create();
+}
+
+cv::Ptr<cv::Tracker> make_tracker_goturn() {
+    return cv::TrackerGOTURN::create();
+}
+
+cv::Ptr<cv::Tracker> make_tracker_mosse() {
+    return cv::TrackerMOSSE::create();
+}
+
 int main(int argc, char **argv) {
-    if (argc != 2) {
+    if (argc != 5) {
         fprintf(stderr, "Please run the program like this:\n");
-        fprintf(stderr, "./ot_test inputvideo.mp4\n\n");
+        fprintf(stderr, "./ot_test <tracker> <inputvideo> <outputvideo> <logfile>\n\n");
         return 1;
     }
 
-    const char *src_file = argv[1];
+    const char *tracker_name = argv[1];
+    const char *src_file = argv[2];
+    const char *dst_file = argv[3];
+    const char *log_file = argv[4];
+
+    cv::Ptr<cv::Tracker> (*make_tracker)();
+    if (strcmp(tracker_name, "MIL") == 0) {
+        make_tracker = &make_tracker_mil;
+    } else if (strcmp(tracker_name, "Boosting") == 0) {
+        make_tracker = &make_tracker_boosting;
+    } else if (strcmp(tracker_name, "MedianFlow") == 0) {
+        make_tracker = &make_tracker_median_flow;
+    } else if (strcmp(tracker_name, "TLD") == 0) {
+        make_tracker = &make_tracker_tld;
+    } else if (strcmp(tracker_name, "KCF") == 0) {
+        make_tracker = &make_tracker_kcf;
+    } else if (strcmp(tracker_name, "GOTURN") == 0) {
+        make_tracker = &make_tracker_goturn;
+    } else if (strcmp(tracker_name, "MOSSE") == 0) {
+        make_tracker = &make_tracker_mosse;
+    } else {
+        fprintf(stderr, "Tracker '%s' is not supported.\n", tracker_name);
+    }
+
     printf("Reading video from file '%s' ...\n", src_file);
     cv::VideoCapture src_video(src_file);
     if (!src_video.isOpened()) {
@@ -53,8 +104,9 @@ int main(int argc, char **argv) {
     printf("Initial ROI: (%.1f;%.1f) to (%.1f;%.1f).\n",
            roi.x, roi.y, roi.x + roi.width, roi.y + roi.height);
 
-    // Create a tracker
-    cv::Ptr<cv::Tracker> tracker = cv::TrackerKCF::create();
+    // Create a tracker and initialise it
+    cv::Ptr<cv::Tracker> tracker = make_tracker_kcf();
+    tracker->init(first_frame, roi);
 
     // Process all frames one by one
     int n_frames_read = 0;
@@ -64,10 +116,13 @@ int main(int argc, char **argv) {
         if (frame.empty())
             break;
         n_frames_read ++;
+        tracker->update(frame,roi);
+        printf("Updated ROI: (%.1f;%.1f) to (%.1f;%.1f).\n",
+               roi.x, roi.y, roi.x + roi.width, roi.y + roi.height);
         cv::rectangle(frame, roi, cv::Scalar(0.9, 0.8, 0.7), 1, cv::LINE_8, 0);
         imshow(WINDOW_TITLE, frame);
 
-        const int key = cv::waitKey(1000);
+        const int key = cv::waitKey(10);
         if (key == 27) {
             printf("ESC was pressed.");
             break;
