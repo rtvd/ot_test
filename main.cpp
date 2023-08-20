@@ -1,3 +1,5 @@
+#include <fstream>
+#include <iostream>
 #include <cstdio>
 #include <algorithm>
 #include <opencv4/opencv2/highgui.hpp>
@@ -76,9 +78,11 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    const int frame_width_px = (int)src_video.get(cv::CAP_PROP_FRAME_WIDTH);
-    const int frame_height_px = (int)src_video.get(cv::CAP_PROP_FRAME_HEIGHT);
-    printf("Video's frame size is %d x %d.\n", frame_width_px, frame_height_px);
+    cv::Size frame_size(
+            (int)src_video.get(cv::CAP_PROP_FRAME_WIDTH),
+            (int)src_video.get(cv::CAP_PROP_FRAME_HEIGHT)
+    );
+    printf("Video's frame size is %d x %d.\n", frame_size.width, frame_size.height);
 
     cv::namedWindow(WINDOW_TITLE, 1);
 
@@ -99,7 +103,7 @@ int main(int argc, char **argv) {
         return 1;
     }
     printf("Clicked at %d x %d.\n", frame_point.x, frame_point.y);
-    const double width = std::min(frame_height_px, frame_width_px)/20.0; // 5%
+    const double width = std::min(frame_size.height, frame_size.width)/20.0; // 5%
     cv::Rect2d roi(frame_point.x - width/2, frame_point.y - width/2, width, width);
     printf("Initial ROI: (%.1f;%.1f) to (%.1f;%.1f).\n",
            roi.x, roi.y, roi.x + roi.width, roi.y + roi.height);
@@ -107,6 +111,16 @@ int main(int argc, char **argv) {
     // Create a tracker and initialise it
     cv::Ptr<cv::Tracker> tracker = make_tracker_kcf();
     tracker->init(first_frame, roi);
+    
+    // Open the output log
+    std::ofstream log;
+    log.open(log_file, std::ios_base::trunc | std::ios_base::out);
+    log << "frame,roi_x,roi_y,roi_w,roi_h" << std::endl;
+    
+    // Begin writing the video
+    int codec = cv::VideoWriter::fourcc('M', 'P', '4', 'V');
+    double video_fps = src_video.get(cv::CAP_PROP_FPS);
+    cv::VideoWriter dst_video(dst_file, codec, video_fps, frame_size, true);
 
     // Process all frames one by one
     int n_frames_read = 0;
@@ -117,8 +131,8 @@ int main(int argc, char **argv) {
             break;
         n_frames_read ++;
         tracker->update(frame,roi);
-        printf("Updated ROI: (%.1f;%.1f) to (%.1f;%.1f).\n",
-               roi.x, roi.y, roi.x + roi.width, roi.y + roi.height);
+        log << n_frames_read << "," << roi.x << "," << roi.y << "," << roi.width << "," << roi.height << std::endl;
+
         cv::Rect2d marker(roi);
         cv::rectangle(frame, marker, cv::Scalar(0., 0., 0.), 1, cv::LINE_8, 0);
         marker.x --;
@@ -126,6 +140,8 @@ int main(int argc, char **argv) {
         marker.width += 2;
         marker.height += 2;
         cv::rectangle(frame, marker, cv::Scalar(255., 255., 255.), 1, cv::LINE_8, 0);
+
+        dst_video.write(frame);
         imshow(WINDOW_TITLE, frame);
 
         const int key = cv::waitKey(10);
@@ -136,6 +152,8 @@ int main(int argc, char **argv) {
     }
 
     printf("Done. Processed %d frames.\n", n_frames_read);
+    log.close();
+    dst_video.release();
     cv::destroyWindow(WINDOW_TITLE);
 
     return 0;
