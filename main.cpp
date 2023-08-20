@@ -119,7 +119,13 @@ int main(int argc, char **argv) {
         tracker->update(frame,roi);
         printf("Updated ROI: (%.1f;%.1f) to (%.1f;%.1f).\n",
                roi.x, roi.y, roi.x + roi.width, roi.y + roi.height);
-        cv::rectangle(frame, roi, cv::Scalar(0.9, 0.8, 0.7), 1, cv::LINE_8, 0);
+        cv::Rect2d marker(roi);
+        cv::rectangle(frame, marker, cv::Scalar(0., 0., 0.), 1, cv::LINE_8, 0);
+        marker.x --;
+        marker.y --;
+        marker.width += 2;
+        marker.height += 2;
+        cv::rectangle(frame, marker, cv::Scalar(255., 255., 255.), 1, cv::LINE_8, 0);
         imshow(WINDOW_TITLE, frame);
 
         const int key = cv::waitKey(10);
