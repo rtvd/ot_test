@@ -1,8 +1,10 @@
 #include <cstdio>
+#include <algorithm>
 #include <opencv4/opencv2/highgui.hpp>
 #include <opencv4/opencv2/core/mat.hpp>
 #include <opencv4/opencv2/imgproc.hpp>
 #include <opencv4/opencv2/videoio.hpp>
+#include <opencv4/opencv2/tracking.hpp>
 
 #include "gui.h"
 
@@ -46,6 +48,13 @@ int main(int argc, char **argv) {
         return 1;
     }
     printf("Clicked at %d x %d.\n", frame_point.x, frame_point.y);
+    const double width = std::min(frame_height_px, frame_width_px)/20.0; // 5%
+    cv::Rect2d roi(frame_point.x - width/2, frame_point.y - width/2, width, width);
+    printf("Initial ROI: (%.1f;%.1f) to (%.1f;%.1f).\n",
+           roi.x, roi.y, roi.x + roi.width, roi.y + roi.height);
+
+    // Create a tracker
+    cv::Ptr<cv::Tracker> tracker = cv::TrackerKCF::create();
 
     // Process all frames one by one
     int n_frames_read = 0;
@@ -55,10 +64,10 @@ int main(int argc, char **argv) {
         if (frame.empty())
             break;
         n_frames_read ++;
-        cv::rectangle(frame, cv::Rect(10, 20, 60, 100), cv::Scalar(0.9, 0.8, 0.7), 1, cv::LINE_8, 0);
+        cv::rectangle(frame, roi, cv::Scalar(0.9, 0.8, 0.7), 1, cv::LINE_8, 0);
         imshow(WINDOW_TITLE, frame);
 
-        const int key = cv::waitKey(1);
+        const int key = cv::waitKey(1000);
         if (key == 27) {
             printf("ESC was pressed.");
             break;
