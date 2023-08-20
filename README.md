@@ -18,7 +18,7 @@ The code should be possible to compile with OpenCV 4.2.
 On Linux, you can start it from command line like this:
 
 ```
-./ot_test <method> <input video file> <output video file> <log file> [<ROI size>]
+./ot_test <method> <input video file> <output video file.mp4v> <log file> [<ROI size>]
 ```
 
 Supported Methods:

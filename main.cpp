@@ -1,6 +1,7 @@
 #include <fstream>
 #include <iostream>
 #include <cstdio>
+#include <cstdlib>
 #include <algorithm>
 #include <opencv4/opencv2/highgui.hpp>
 #include <opencv4/opencv2/core/mat.hpp>
@@ -41,9 +42,9 @@ cv::Ptr<cv::Tracker> make_tracker_mosse() {
 }
 
 int main(int argc, char **argv) {
-    if (argc != 5) {
+    if (argc < 5 || argc > 6) {
         fprintf(stderr, "Please run the program like this:\n");
-        fprintf(stderr, "./ot_test <tracker> <inputvideo> <outputvideo> <logfile>\n\n");
+        fprintf(stderr, "./ot_test <tracker> <inputvideo> <outputvideo> <logfile> [<ROI size>]\n\n");
         return 1;
     }
 
@@ -51,6 +52,18 @@ int main(int argc, char **argv) {
     const char *src_file = argv[2];
     const char *dst_file = argv[3];
     const char *log_file = argv[4];
+
+    double roi_size = 5.0;
+    if (argc == 6) {
+        const char *roi_size_txt = argv[5];
+        char *ptr = nullptr;
+        roi_size = strtof(roi_size_txt, &ptr);
+        if ((ptr - roi_size_txt) != strlen(roi_size_txt)) {
+            fprintf(stderr, "Failed to parse ROI size '%s'\n", roi_size_txt);
+            return 1;
+        }
+    }
+    printf("ROI size: %f%%\n", roi_size);
 
     cv::Ptr<cv::Tracker> (*make_tracker)();
     if (strcmp(tracker_name, "MIL") == 0) {
@@ -103,7 +116,7 @@ int main(int argc, char **argv) {
         return 1;
     }
     printf("Clicked at %d x %d.\n", frame_point.x, frame_point.y);
-    const double width = std::min(frame_size.height, frame_size.width)/20.0; // 5%
+    const double width = std::min(frame_size.height, frame_size.width)*(roi_size/100.0); // ROI size is in percents
     cv::Rect2d roi(frame_point.x - width/2, frame_point.y - width/2, width, width);
     printf("Initial ROI: (%.1f;%.1f) to (%.1f;%.1f).\n",
            roi.x, roi.y, roi.x + roi.width, roi.y + roi.height);
@@ -118,11 +131,12 @@ int main(int argc, char **argv) {
     log << "frame,roi_x,roi_y,roi_w,roi_h" << std::endl;
     
     // Begin writing the video
-    int codec = cv::VideoWriter::fourcc('M', 'P', '4', 'V');
+    int codec = cv::VideoWriter::fourcc('m', 'p', '4', 'v');
     double video_fps = src_video.get(cv::CAP_PROP_FPS);
     cv::VideoWriter dst_video(dst_file, codec, video_fps, frame_size, true);
 
     // Process all frames one by one
+    bool tracking_ok = true;
     int n_frames_read = 0;
     cv::Mat frame;
     while (true) {
@@ -130,16 +144,23 @@ int main(int argc, char **argv) {
         if (frame.empty())
             break;
         n_frames_read ++;
-        tracker->update(frame,roi);
-        log << n_frames_read << "," << roi.x << "," << roi.y << "," << roi.width << "," << roi.height << std::endl;
+        if (tracking_ok && !tracker->update(frame,roi)) {
+            tracking_ok = false;
+        }
+        if (tracking_ok) {
+            log << n_frames_read << "," << roi.x << "," << roi.y << "," << roi.width << "," << roi.height << std::endl;
 
-        cv::Rect2d marker(roi);
-        cv::rectangle(frame, marker, cv::Scalar(0., 0., 0.), 1, cv::LINE_8, 0);
-        marker.x --;
-        marker.y --;
-        marker.width += 2;
-        marker.height += 2;
-        cv::rectangle(frame, marker, cv::Scalar(255., 255., 255.), 1, cv::LINE_8, 0);
+            // paint marker on the fram
+            cv::Rect2d marker(roi);
+            cv::rectangle(frame, marker, cv::Scalar(0., 0., 0.), 1, cv::LINE_8, 0);
+            marker.x --;
+            marker.y --;
+            marker.width += 2;
+            marker.height += 2;
+            cv::rectangle(frame, marker, cv::Scalar(255., 255., 255.), 1, cv::LINE_8, 0);
+        } else {
+            log << n_frames_read << ",,,," << std::endl;
+        }
 
         dst_video.write(frame);
         imshow(WINDOW_TITLE, frame);
