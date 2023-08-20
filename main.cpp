@@ -4,32 +4,9 @@
 #include <opencv4/opencv2/imgproc.hpp>
 #include <opencv4/opencv2/videoio.hpp>
 
+#include "gui.h"
+
 static const char *const WINDOW_TITLE = "Object Tracking Test";
-
-void _mouse_click_callback(int event, int x, int y, int flags, void *userdata) {
-    if (event != cv::EVENT_LBUTTONUP)
-        return;
-
-    auto *frame_point = (cv::Point2i *) userdata;
-    frame_point->x = x;
-    frame_point->y = y;
-}
-
-bool get_mouse_click(cv::Point2i &point) {
-    point.x = -1;
-    point.y = -1;
-    cv::setMouseCallback(WINDOW_TITLE, _mouse_click_callback, &point);
-    while (true) {
-        if (point.x != -1 && point.y != -1)
-            break;
-        if (cv::waitKey(100) == 27) {
-            cv::setMouseCallback(WINDOW_TITLE, nullptr, nullptr);
-            return false;
-        }
-    }
-    cv::setMouseCallback(WINDOW_TITLE, nullptr, nullptr);
-    return true;
-}
 
 int main(int argc, char **argv) {
     if (argc != 2) {
@@ -64,7 +41,7 @@ int main(int argc, char **argv) {
 
     // Wait for the user to click at the point of interest
     cv::Point2i frame_point;
-    if (!get_mouse_click(frame_point)) {
+    if (!get_mouse_click(frame_point, WINDOW_TITLE)) {
         fprintf(stderr, "ESC pressed, terminating.\n");
         return 1;
     }
