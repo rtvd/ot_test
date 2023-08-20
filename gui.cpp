@@ -1,7 +1,3 @@
-//
-// Created by rtvd on 19/08/23.
-//
-
 #include <opencv4/opencv2/highgui.hpp>
 #include "gui.h"
 

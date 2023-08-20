@@ -32,4 +32,10 @@ Supported Methods:
 * MOSSE
 
 It is not necessary to specify ROI size but if you do, that would be in percents of the biggest dimension of the frame.
-For example, 5 means 5% of the frame's height (in case height is smaller than width). 
+For example, 5 means 5% of the frame's height (in case height is smaller than width).
+
+# Known issues
+
+When a window with the first frame is opened, its size should be the same as the size of the frame.
+However, when the frame is too large, the window will be smaller than the frame and the code which identifies the ROI
+would fail.

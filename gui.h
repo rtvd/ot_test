@@ -1,7 +1,3 @@
-//
-// Created by rtvd on 19/08/23.
-//
-
 #ifndef OT_TEST_GUI_H
 #define OT_TEST_GUI_H
 
