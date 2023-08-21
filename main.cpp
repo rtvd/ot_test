@@ -1,4 +1,5 @@
 #include <fstream>
+#include <sstream>
 #include <iostream>
 #include <cstdio>
 #include <cstdlib>
@@ -41,6 +42,41 @@ cv::Ptr<cv::Tracker> make_tracker_mosse() {
     return cv::TrackerMOSSE::create();
 }
 
+struct BoundingBox {
+    double x1, y1, x2, y2;
+};
+
+BoundingBox bounding_box_from_rect(const cv::Rect2d &roi, const cv::Size &frame_size) {
+    return {
+        roi.x / (double)frame_size.width,
+        roi.y / (double)frame_size.height,
+        (roi.x + roi.width) / (double)frame_size.width,
+        (roi.y + roi.height) / (double)frame_size.height
+    };
+}
+
+class BoundingBoxReporter {
+private:
+    std::ofstream  &log;
+
+public:
+    explicit BoundingBoxReporter(std::ofstream  &log): log(log) {
+        log << "x1,y1,x2,y2" << std::endl;
+
+    }
+
+    void report(const BoundingBox &bb, bool tracking_ok) const {
+        std::stringstream line;
+        if (tracking_ok) {
+            line << bb.x1 << "," << bb.y1 << "," << bb.x2 << "," << bb.y2 << std::endl;
+        } else {
+            line << ",,," << std::endl;
+        }
+        std::cout << line.str();
+        log << line.str();
+    }
+};
+
 int main(int argc, char **argv) {
     if (argc < 5 || argc > 6) {
         fprintf(stderr, "Please run the program like this:\n");
@@ -63,7 +99,6 @@ int main(int argc, char **argv) {
             return 1;
         }
     }
-    printf("ROI size: %f%%\n", roi_size);
 
     cv::Ptr<cv::Tracker> (*make_tracker)();
     if (strcmp(tracker_name, "MIL") == 0) {
@@ -84,7 +119,6 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Tracker '%s' is not supported.\n", tracker_name);
     }
 
-    printf("Reading video from file '%s' ...\n", src_file);
     cv::VideoCapture src_video(src_file);
     if (!src_video.isOpened()) {
         fprintf(stderr, "Failed to open the source file.\n");
@@ -95,7 +129,6 @@ int main(int argc, char **argv) {
             (int)src_video.get(cv::CAP_PROP_FRAME_WIDTH),
             (int)src_video.get(cv::CAP_PROP_FRAME_HEIGHT)
     );
-    printf("Video's frame size is %d x %d.\n", frame_size.width, frame_size.height);
 
     cv::namedWindow(WINDOW_TITLE, 1);
 
@@ -106,7 +139,6 @@ int main(int argc, char **argv) {
         fprintf(stderr, "The video had no frames!\n");
         return 1;
     }
-    src_video.set(cv::CAP_PROP_POS_FRAMES, 0);  // rewind back
     imshow(WINDOW_TITLE, first_frame);
 
     // Wait for the user to click at the point of interest
@@ -115,11 +147,8 @@ int main(int argc, char **argv) {
         fprintf(stderr, "ESC pressed, terminating.\n");
         return 1;
     }
-    printf("Clicked at %d x %d.\n", frame_point.x, frame_point.y);
     const double width = std::min(frame_size.height, frame_size.width)*(roi_size/100.0); // ROI size is in percents
     cv::Rect2d roi(frame_point.x - width/2, frame_point.y - width/2, width, width);
-    printf("Initial ROI: (%.1f;%.1f) to (%.1f;%.1f).\n",
-           roi.x, roi.y, roi.x + roi.width, roi.y + roi.height);
 
     // Create a tracker and initialise it
     cv::Ptr<cv::Tracker> tracker = make_tracker_kcf();
@@ -128,8 +157,8 @@ int main(int argc, char **argv) {
     // Open the output log
     std::ofstream log;
     log.open(log_file, std::ios_base::trunc | std::ios_base::out);
-    log << "frame,roi_x,roi_y,roi_w,roi_h" << std::endl;
-    
+    BoundingBoxReporter bb_reporter(log);
+
     // Begin writing the video
     int codec = cv::VideoWriter::fourcc('m', 'p', '4', 'v');
     double video_fps = src_video.get(cv::CAP_PROP_FPS);
@@ -137,18 +166,25 @@ int main(int argc, char **argv) {
 
     // Process all frames one by one
     bool tracking_ok = true;
-    int n_frames_read = 0;
     cv::Mat frame;
+    BoundingBox bb(bounding_box_from_rect(roi, frame_size));
+    bb_reporter.report(bb, tracking_ok);
+
     while (true) {
         src_video >> frame;
         if (frame.empty())
             break;
-        n_frames_read ++;
-        if (tracking_ok && !tracker->update(frame,roi)) {
+
+        if (tracking_ok && !tracker->update(frame, roi)) {
             tracking_ok = false;
         }
         if (tracking_ok) {
-            log << n_frames_read << "," << roi.x << "," << roi.y << "," << roi.width << "," << roi.height << std::endl;
+            bb = bounding_box_from_rect(roi, frame_size);
+
+            std::stringstream overlay_text;
+            overlay_text << "ROI's bounding box: (" << bb.x1 << ";" << bb.y1 << ")" <<
+                " to (" << bb.x2 << ";" << bb.y2 << ")";
+            cv::displayOverlay(WINDOW_TITLE, overlay_text.str(), 0);
 
             // paint marker on the fram
             cv::Rect2d marker(roi);
@@ -159,20 +195,20 @@ int main(int argc, char **argv) {
             marker.height += 2;
             cv::rectangle(frame, marker, cv::Scalar(255., 255., 255.), 1, cv::LINE_8, 0);
         } else {
-            log << n_frames_read << ",,,," << std::endl;
+            cv::displayOverlay(WINDOW_TITLE, "Tracking lost", 0);
         }
 
+        bb_reporter.report(bb, tracking_ok);
         dst_video.write(frame);
         imshow(WINDOW_TITLE, frame);
 
         const int key = cv::waitKey(10);
         if (key == 27) {
-            printf("ESC was pressed.");
+            fprintf(stderr, "ESC was pressed.");
             break;
         }
     }
 
-    printf("Done. Processed %d frames.\n", n_frames_read);
     log.close();
     dst_video.release();
     cv::destroyWindow(WINDOW_TITLE);

@@ -11,7 +11,21 @@ Also, a log file of ROI coordinates is created. The log file is written out in C
 # How to build?
 
 The code should be possible to compile with OpenCV 4.2.
+Your OpenCV must have support for both trackers and QT compiled in, which means most of the builds won't work.
 
+In order to build a custom release:
+1. Download OpenCV 4.2.0 from here https://opencv.org/releases/ and extract locally.
+2. Check out OpenCV contrib from here https://github.com/opencv/opencv_contrib and switch it to tag 4.2.0.
+3. Create an empty directory and go into it.
+4. Decide on where would the new OpenCV be installed.
+5. Configure the build like this: `cmake CMAKE_BUILD_TYPE=RELEASE -DOPENCV_EXTRA_MODULES_PATH=<source code of opencv_contrib>/modules -DCMAKE_INSTALL_PREFIX=<source code of opencv> -DWITH_QT=ON <where to install to>`
+6. Run the build: `make`
+7. Install the build: `make install`
+
+When you have this custom build of OpenCV, you can use choose it when building this source like this:
+```
+cmake -DCMAKE_PREFIX_PATH=<location of custom build of OpenCV>
+```
 
 # How to launch?
 
